@@ -11,12 +11,14 @@ def generate_percentiles(nbins=20):
 
     filters = ['u', 'g', 'r', 'i', 'z', 'y']
 
-    restore_file = 'healpix/59560.000000_59926.000000.npz'
+    restore_file = 'healpix/59560_59772.npz'
     disk_data = np.load(restore_file)
     required_mjds = disk_data['header'][()]['required_mjds'].copy()
     dict_of_lists = disk_data['dict_of_lists'][()].copy()
-    sky_brightness = disk_data['sky_brightness'][()].copy()
     disk_data.close()
+
+    sb_file = 'healpix/59560_59772.npy'
+    sky_brightness = np.load(sb_file)
 
     npix = sky_brightness['r'].shape[-1]
 
@@ -25,11 +27,16 @@ def generate_percentiles(nbins=20):
 
     # find the indices of all the evenly spaced mjd values
     even_mjd_indx = np.in1d(dict_of_lists['mjds'], required_mjds)
+ 
+    # make an array to hold only the sky brightness values for evenly spaced mjds
+    sky_brightness_reduced = np.ones((even_mjd_indx.sum(), npix),
+                                      dtype=sky_brightness.dtype)
 
     for key in dict_of_lists:
         dict_of_lists[key] = dict_of_lists[key][even_mjd_indx]
-    for key in sky_brightness:
-        sky_brightness[key] = sky_brightness[key][even_mjd_indx, :]
+    for key in filters:
+        sky_brightness_reduced[key] = sky_brightness[key][even_mjd_indx, :]
+    del sky_brightness
 
     for filtername in filters:
         # convert surface brightness to m5
@@ -37,7 +44,7 @@ def generate_percentiles(nbins=20):
         # increase as a function of airmass
         airmass_correction = np.power(dict_of_lists['airmass'], 0.6)
         FWHMeff *= airmass_correction
-        m5_arr = m5_flat_sed(filtername, sky_brightness[filtername], FWHMeff, 30.,
+        m5_arr = m5_flat_sed(filtername, sky_brightness_reduced[filtername], FWHMeff, 30.,
                              dict_of_lists['airmass'])
 
         for indx in np.arange(npix):
